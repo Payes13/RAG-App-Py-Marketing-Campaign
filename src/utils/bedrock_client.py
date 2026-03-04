@@ -1,6 +1,7 @@
 import os
 from langchain_aws import ChatBedrockConverse, BedrockEmbeddings
 
+# WHERE ARE THESE VALUES COMING FROM, WHERE DID I GET THEM FROM?
 LLM_MODEL_ID = "anthropic.claude-3-sonnet-20240229-v1:0"
 EMBEDDING_MODEL_ID = "amazon.titan-embed-text-v1"
 
