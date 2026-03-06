@@ -88,8 +88,7 @@ These are used by almost everything else. Read them next.
 
 | #  | File | What it does |
 |----|------|-------------|
-| 23 | [cdk/marketing_ai_stack.py](cdk/marketing_ai_stack.py) | AWS resources (Lambda, S3, RDS, API Gateway) |
-| 24 | [cdk/pipeline_stack.py](cdk/pipeline_stack.py) | CI/CD pipeline (CodePipeline stages) |
-| 25 | [app.py](app.py) | CDK entry point — ties the stacks together |
+| 23 | [cdk/marketing_ai_stack.py](cdk/marketing_ai_stack.py) | AWS resources (Lambda, S3, API Gateway) |
+| 24 | [app.py](app.py) | CDK entry point — ties the stacks together |
 
 ---

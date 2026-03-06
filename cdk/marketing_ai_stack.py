@@ -101,6 +101,17 @@ class MarketingAIStack(Stack):
 
         # ── Shared environment variables ───────────────────────────────────────
 
+        # those 4 variables are intentionally left out of common_env. The comment on line 109 is the explanation: they're meant to be set separately, not by CDK.
+        # Here's why:
+        # The variables in common_env are values CDK already knows at deploy time — it created the S3 buckets itself, so it can just reference .bucket_name directly. Same for the secret name strings, which are just hardcoded paths.
+        # The 4 excluded variables are things CDK doesn't know:
+        # DB_HOST — your PostgreSQL server's address (an RDS instance, or external DB). CDK didn't create it in this stack, so it has no reference to it.
+        # DB_PORT, DB_NAME — also DB connection details CDK doesn't manage here
+        # AWS_BEDROCK_REGION — an infra/ops decision, not tied to any resource this stack creates
+        # So yes — those 4 env vars will NOT exist on the Lambda unless you add them manually. The two common ways to do that:
+        # AWS Console → Lambda → Configuration → Environment Variables → add them by hand after deploying
+        # SSM Parameter Store — as the comment hints ("set via SSM") — you store the values there and have CDK or a deploy script pull them in. This is cleaner for teams because the values live in one central place.
+        # This is a very common CDK pattern: the stack handles what it owns, and environment-specific config (DB host, region) is injected separately so the same CDK stack can be deployed to different environments (dev, staging, prod) without code changes.
         common_env = {
             "S3_INPUT_BUCKET_NAME": input_bucket.bucket_name,
             "S3_OUTPUT_BUCKET_NAME": output_bucket.bucket_name,

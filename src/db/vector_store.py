@@ -3,6 +3,11 @@ from typing import Any
 
 from src.db.postgres_client import get_connection
 
+"""
+Where are embeddings stored?
+
+In PostgreSQL — specifically the document_embeddings table. See line 23: it does a SQL INSERT INTO document_embeddings. This table uses the pgvector extension, which lets Postgres store and search high-dimensional vectors natively. So the database is doing double duty: regular data AND vector similarity search.
+"""
 
 def store_embedding(
     content: str,
