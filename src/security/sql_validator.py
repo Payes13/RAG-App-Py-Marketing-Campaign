@@ -54,9 +54,7 @@ def _extract_table_names(parsed) -> list[str]:
     join_seen = False
 
     for token in parsed.tokens:
-        if token.ttype is Keyword and token.normalized.upper() in ("FROM", "JOIN", "INNER JOIN",
-                                                                     "LEFT JOIN", "RIGHT JOIN",
-                                                                     "FULL JOIN", "CROSS JOIN"):
+        if token.ttype is Keyword and token.normalized.upper() in ("FROM", "JOIN", "INNER JOIN", "LEFT JOIN", "RIGHT JOIN", "FULL JOIN", "CROSS JOIN"):
             from_seen = True
             join_seen = True
         elif from_seen:

@@ -23,14 +23,11 @@ _csv_metadata: dict = {
     "csv_files_used": [],
 }
 
-
 def reset_csv_metadata():
     _csv_metadata["csv_files_used"] = []
 
-
 def get_csv_metadata() -> dict:
     return _csv_metadata
-
 
 @tool
 def analyze_csv_data(input_str: str) -> str:
@@ -44,6 +41,7 @@ def analyze_csv_data(input_str: str) -> str:
     if ":" not in input_str:
         return "Invalid input. Use format: 's3_key:question'"
 
+    # 1 means split only once. So Python will stop after the first :, even if more exist.
     s3_key, question = input_str.split(":", 1)
     s3_key = s3_key.strip()
     question = question.strip()
@@ -70,16 +68,16 @@ def analyze_csv_data(input_str: str) -> str:
         summary_stats = df.describe(include="all").to_string()
 
         system_prompt = f"""You are a data analyst. Answer the user's question about the CSV data.
-Be concise and factual. Return only the answer, no preamble.
+        Be concise and factual. Return only the answer, no preamble.
 
-CSV COLUMNS AND TYPES:
-{json.dumps(column_info, indent=2)}
+        CSV COLUMNS AND TYPES:
+        {json.dumps(column_info, indent=2)}
 
-SAMPLE DATA (first 5 rows):
-{sample_data}
+        SAMPLE DATA (first 5 rows):
+        {sample_data}
 
-SUMMARY STATISTICS:
-{summary_stats}"""
+        SUMMARY STATISTICS:
+        {summary_stats}"""
 
         llm = get_llm(max_tokens=512)
         messages = [

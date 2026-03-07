@@ -19,14 +19,11 @@ _rag_metadata: dict = {
     "rag_chunks": [],
 }
 
-
 def reset_rag_metadata():
     _rag_metadata["rag_chunks"] = []
 
-
 def get_rag_metadata() -> dict:
     return _rag_metadata
-
 
 @tool
 def search_campaign_documents(question: str) -> str:
@@ -61,10 +58,21 @@ def search_campaign_documents(question: str) -> str:
             source = chunk.get("source_file", "unknown")
             content = chunk.get("content", "")
             similarity = chunk.get("similarity", 0)
+            # .3f = 3 decimal places
+            # ["[Document 1 — policy.pdf (similarity: 0.923)]\nEmployees must submit expenses within 30 days."]
             result_parts.append(
                 f"[Document {i} — {source} (similarity: {similarity:.3f})]\n{content}"
             )
 
+        """
+        [Document 1 — policy.pdf (similarity: 0.923)]
+        Employees must submit expenses within 30 days.
+
+        ---
+
+        [Document 2 — handbook.pdf (similarity: 0.813)]
+        Vacation requests must be approved by managers.
+        """
         return "\n\n---\n\n".join(result_parts)
 
     except Exception as exc:

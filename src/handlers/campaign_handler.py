@@ -23,14 +23,12 @@ from src.security.prompt_guard import check_user_input
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-
 def _response(status_code: int, body: dict) -> dict:
     return {
         "statusCode": status_code,
         "headers": {"Content-Type": "application/json"},
         "body": json.dumps(body, default=str),
     }
-
 
 def _log_campaign_to_db(metadata: dict, campaign_key: str, metadata_key: str) -> None:
     conn = get_connection("app")
@@ -58,7 +56,6 @@ def _log_campaign_to_db(metadata: dict, campaign_key: str, metadata_key: str) ->
     finally:
         conn.close()
 
-
 def handler(event: dict, context) -> dict:
     request_id = getattr(context, "aws_request_id", "local")
     logger.info(json.dumps({
@@ -75,6 +72,15 @@ def handler(event: dict, context) -> dict:
 
     # Required fields
     required = ["route", "audience_description", "campaign_type", "language", "tone"]
+    # for each field name f in required, include it in missing if body.get(f) is falsy. body.get(f) returns None if the key isn't in the dict (no KeyError). not body.get(f) is True when the value is None, "", 0, or simply absent. The result is a list of every required key that the caller forgot to send (or sent empty).
+    """
+    So the order per iteration is:
+    f gets the next string from required
+    body.get(f) is evaluated — did the caller send this field?
+    not body.get(f) — is it missing/empty?
+    If true (missing) → first f is collected into missing
+    If false (present) → first f is skipped
+    """
     missing = [f for f in required if not body.get(f)]
     if missing:
         return _response(400, {"error": f"Missing required fields: {missing}"})
@@ -87,6 +93,11 @@ def handler(event: dict, context) -> dict:
     csv_file_key = body.get("csv_file_key", "")
 
     # Layer 6: Prompt injection guard
+    # tuple unpacking: The list contains tuples — pairs of (name, value). On each iteration Python automatically unpacks the pair into two variables. It's equivalent to:
+    # what Python does internally each iteration:
+    # (field_name, value) = ("route", route)
+    # → field_name = "route", value = "Montreal-San Salvador"
+    # Why is language (and campaign_type) left out of the injection check?. Because language and campaign_type are expected to be short controlled values — think "en", "fr", "promotional". There's almost no attack surface in a 2-letter language code. The fields that ARE checked are the ones where a user types free-form text — a route name, a description of their audience, a tone — any of which could contain something like "Ignore previous instructions and...". That's where injection lives.
     for field_name, value in [
         ("route", route),
         ("audience_description", audience_description),

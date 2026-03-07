@@ -6,6 +6,14 @@ import boto3
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+"""
+                        PDF	                      CSV
+Content stored in DB?	Yes — chunked and       No — stays in S3
+                        embedded as vectors	
+How it's queried later	Vector similarity       Downloaded fresh from S3 
+                        search via pgvector	    and analyzed by the LLM
+"""
+
 # Module-level cache so Lambda doesn't call Secrets Manager on every invocation
 _secret_cache: dict[str, str] = {}
 
@@ -103,5 +111,9 @@ def execute_query(conn: psycopg2.extensions.connection, sql: str) -> list[dict]:
         cursor.execute("SET statement_timeout = '5000';")
         cursor.execute(sql)
         if cursor.description is not None:
+            # This is a list comprehension. 
+            # cursor.fetchall() → returns all rows from the SQL query.
+            # Each row is converted to a dictionary using dict(row).
+            # A list of dictionaries is returned.
             return [dict(row) for row in cursor.fetchall()]
         return []

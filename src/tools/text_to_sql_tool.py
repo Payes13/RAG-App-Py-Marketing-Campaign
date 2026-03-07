@@ -111,27 +111,90 @@ def _generate_sql(question: str) -> str:
 
 
 # Shared metadata collector — populated during tool execution and read by the agent
+"""
+_tool_metadata is a module-level global dict — it lives at the top of the file, outside any function, so it persists for the lifetime of the Python process. In Lambda, this means it survives across warm invocations (when Lambda reuses the same container for a second request). Without resetting it, request 2 would see request 1's SQL queries mixed in.
+
+That's exactly why reset_tool_metadata() exists and why it's called at the top of every run_marketing_agent()
+
+_tool_metadata is defined at the top of the file, outside any function — that makes it module-level. Python runs that line once when the file is first imported, then never again.
+
+Every function in that file can read and modify it, and it keeps its value between calls because nobody re-initializes it. That's why reset_tool_metadata() has to explicitly wipe it — otherwise the list just keeps growing across requests.
+
+The underscore prefix _tool_metadata is a Python convention meaning "this is private to this module, don't import it from outside." It's not enforced by the language — it's just a signal to other developers.
+"""
+"""
+Why metadata is stored inside query_customer_database?. The tool's job is to answer the agent's question and return a string. But the app also needs to produce a metadata PDF showing what happened during the request — which SQL queries ran, which tables were accessed. The tool itself is the only place that knows this. So every time the tool runs successfully, it records what it did:
+# text_to_sql_tool.py:182
+_tool_metadata["sql_queries"].append(generated_sql)
+After the agent finishes, marketing_agent.py reads it:
+# marketing_agent.py:189
+sql_meta = get_tool_metadata()
+metadata = {
+    "sql_queries": sql_meta.get("sql_queries", []),   # goes into the metadata PDF
+    ...
+}
+"""
 _tool_metadata: dict[str, Any] = {
     "sql_queries": [],
     "tables_accessed": [],
 }
 
-
 def reset_tool_metadata():
     _tool_metadata["sql_queries"] = []
     _tool_metadata["tables_accessed"] = []
 
-
 def get_tool_metadata() -> dict:
     return _tool_metadata
 
+# A decorator wraps a function and adds behavior to it. @tool is LangChain's decorator that transforms a plain Python function into a LangChain Tool object — which has extra properties the agent needs:. After the decorator runs, query_customer_database is no longer a plain function — it's a Tool object with: .name → "query_customer_database" (from the function name), .description → "Use this tool when you need to find customer audiences..." (from the docstring), .func → the original function, stored inside. The agent reads .name and .description to decide which tool to pick for a given task. That docstring is literally what the LLM reads to understand what each tool does. the """""" is the docstring that will be used by the LLM.
+"""
+That docstring is the tool description the LLM reads at runtime to decide which tool to pick. It's not documentation for a human developer — it's an instruction to the AI.
 
+When the ReAct agent runs, LangChain builds a prompt that lists all available tools like this:
+
+query_customer_database: Use this tool when you need to find customer audiences, flight history, demographics, or any structured customer data.
+"""
+
+"""
+The LLM never directly calls the function. Here's what actually happens:
+
+Step 1 — The LLM outputs plain text
+
+When the agent runs, the LLM produces a text string following the ReAct format defined in the prompt template:
+Thought: I need customer demographics for the Montreal-San Salvador route.
+Action: query_customer_database
+Action Input: How many customers flew Montreal to San Salvador in the last 12 months and what are their demographics?
+
+That's just text. The LLM doesn't "call" anything — it writes words.
+
+Step 2 — AgentExecutor parses that text
+
+AgentExecutor reads the LLM's output and looks for the Action: and Action Input: lines. It extracts:
+
+tool name → "query_customer_database"
+tool input → "How many customers flew Montreal to San Salvador..."
+
+Step 3 — AgentExecutor makes the actual function call
+# What AgentExecutor does internally — you never write this:
+tool = tools_by_name["query_customer_database"]   # looks up the Tool object
+result = tool.func("How many customers flew Montreal to San Salvador...")
+#                   ↑ this is where `question` gets its value
+
+Step 4 — Result fed back to the LLM
+
+The tool's return value gets appended to the prompt as an Observation:, and the LLM reads it to decide what to do next.
+
+So the full chain is:
+LLM writes text → AgentExecutor parses it → AgentExecutor calls the function → 
+function runs with question="..." → returns a string → AgentExecutor feeds it back to LLM
+The programmer never passes question manually — AgentExecutor is the middleman that bridges the LLM's text output to real function calls.
+"""
 @tool
 def query_customer_database(question: str) -> str:
-    """Use this tool when you need to find customer audiences, flight history,
-    demographics, or any structured customer data."""
+    """Use this tool when you need to find customer audiences, flight history, demographics, or any structured customer data."""
     request_id = "unknown"
     generated_sql = ""
+    # RETURNS SECONDS
     start = time.time()
 
     try:
@@ -156,8 +219,27 @@ def query_customer_database(question: str) -> str:
             return f"Query rejected by security validation: {reason}"
 
         # Execute using read-only user
+        # USING with SYNTAX
+        """
+        try:
+            with get_connection("readonly") as conn:
+                rows = execute_query(conn, generated_sql)
+
+        except psycopg2.extensions.QueryCanceledError:
+            elapsed = int((time.time() - start) * 1000)
+            ...
+
+            return "Query timed out after 5 seconds"
+
+        # When the with block finishes conn.close() IS EXECUTED AUTOMATICALLY
+        """
         conn = get_connection("readonly")
         try:
+            # rows looks like:
+            # [
+            #   {"id": 1, "name": "Alice"},
+            #   {"id": 2, "name": "Bob"}
+            # ]
             rows = execute_query(conn, generated_sql)
         except psycopg2.extensions.QueryCanceledError:
             elapsed = int((time.time() - start) * 1000)
